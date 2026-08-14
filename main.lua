@@ -734,7 +734,7 @@ local function buildDiscordPayload(results, meta)
     end
 
     return {
-        content = meta.pingEveryone and "@Everyone" or "",
+        content = meta.pingEveryone and "@everyone" or "",
         username = "VoidScript",
         embeds = {
             {
