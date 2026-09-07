@@ -735,15 +735,15 @@ local function buildDiscordPayload(results, meta)
 
     return {
         content = meta.pingEveryone and "@everyone" or "",
-        username = "Baddies Scanner",
+        username = "VoidScript Hits",
         embeds = {
             {
-                title = "💅 Baddies Item Skins Scan",
+                title = "💅 Void Hits | Baddies ",
                 description = description,
                 color = 0xF1C40F,
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                 footer = {
-                    text = "Baddies Scanner - " .. os.date("%d/%m/%Y %H:%M"),
+                    text = "You Got Hits- " .. os.date("%d/%m/%Y %H:%M"),
                 },
             },
         },
